@@ -58,17 +58,15 @@ public class MySqliteHelper extends SQLiteOpenHelper implements DatabaseAccess{
     }
 
     @Override
-    public Mode getMode() {
-        Mode m = null;
+    public OperatingMode getMode() {
+        db = openDatabase();
+        OperatingMode m = null;
         String sql = "SELECT * FROM " + ModeTable.TABLE_MODE;
         Cursor c = null;
         try {
             c = db.rawQuery(sql, null);
             if (c.moveToFirst()) {
-                String modeName = c.getString(c.getColumnIndex(ModeTable.COLUMN_MODE));
-                if (modeName != null) {
-                    m = Mode.fromName(modeName);
-                }
+                m = makeOperatingMode(c);
             }
         } finally {
             if (c != null) {
@@ -82,13 +80,39 @@ public class MySqliteHelper extends SQLiteOpenHelper implements DatabaseAccess{
     @Override
     public void setMode(OperatingMode mode) {
         db = openDatabase();
-        ContentValues modeContentvalues = new ContentValues();
-        makeModeContentValues(modeContentvalues, mode);
-        db.insert(ModeTable.TABLE_MODE, null, modeContentvalues);
-        closeDatabase();
+        ContentValues modeContentvalues = null;
+        if (mode != null) {
+            modeContentvalues = new ContentValues();
+            makeModeContentValues(modeContentvalues, mode);
+        }
+        db.beginTransaction();
+        try {
+            db.delete(ModeTable.TABLE_MODE, null, null);
+            if (mode != null) {
+                db.insert(ModeTable.TABLE_MODE, null, modeContentvalues);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+            closeDatabase();
+        }
     }
 
     private void makeModeContentValues(ContentValues contentValues, OperatingMode operatingMode) {
-        contentValues.put(ModeTable.TABLE_MODE, operatingMode.getMode().name());
+        contentValues.put(ModeTable.COLUMN_MODE, operatingMode.getMode().name());
+        contentValues.put(ModeTable.COLUMN_TIMESTAMP, operatingMode.getTimestamp());
+        contentValues.put(ModeTable.COLUMN_RANDOM_NUMBER, operatingMode.getRand());
+    }
+
+    private OperatingMode makeOperatingMode(Cursor c) {
+        OperatingMode operatingMode = new OperatingMode();
+        String modeName = c.getString(c.getColumnIndex(ModeTable.COLUMN_MODE));
+
+        if (modeName != null) {
+            operatingMode.setMode(Mode.fromName(modeName));
+        }
+        operatingMode.setRand(c.getDouble(c.getColumnIndex(ModeTable.COLUMN_RANDOM_NUMBER)));
+        operatingMode.setTimestamp(c.getLong(c.getColumnIndex(ModeTable.COLUMN_TIMESTAMP)));
+        return operatingMode;
     }
 }
